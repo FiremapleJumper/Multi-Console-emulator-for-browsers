@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Browser N64</title>
+<style>
+  :root{--bg:#0e0f13;--panel:#181a21;--line:#2a2d38;--fg:#e8e9ee;--dim:#8b8fa0;--accent:#e4572e}
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%;background:var(--bg);color:var(--fg);font:15px/1.5 system-ui,sans-serif}
+  header{display:flex;align-items:center;justify-content:space-between;padding:10px 18px;border-bottom:1px solid var(--line);background:var(--panel)}
+  header h1{margin:0;font-size:17px;letter-spacing:.5px}
+  header h1 span{color:var(--accent)}
+  button{background:var(--accent);color:#fff;border:0;border-radius:6px;padding:8px 14px;font:inherit;cursor:pointer}
+  button.ghost{background:transparent;border:1px solid var(--line);color:var(--dim)}
+  main{height:calc(100% - 50px);display:flex;align-items:center;justify-content:center;padding:16px}
+  #drop{width:min(560px,100%);border:2px dashed var(--line);border-radius:14px;padding:44px 24px;text-align:center;background:var(--panel);transition:.15s}
+  #drop.over{border-color:var(--accent);background:#20212a}
+  #drop h2{margin:0 0 6px;font-size:20px}
+  #drop p{margin:6px 0;color:var(--dim)}
+  #err{color:#ff7b7b;margin-top:12px;min-height:1.2em}
+  #stage{display:none;width:100%;height:100%;max-width:1100px}
+  #game{width:100%;height:100%}
+  small{color:var(--dim)}
+</style>
+</head>
+<body>
+<header>
+  <h1><span>N64</span> in your browser</h1>
+  <button class="ghost" id="reset" style="display:none">Load another ROM</button>
+</header>
+<main>
+  <div id="drop">
+    <h2>Drop a ROM here</h2>
+    <p>.z64 · .n64 · .v64 (or zipped)</p>
+    <p><button id="pick">Choose file</button></p>
+    <input type="file" id="file" accept=".z64,.n64,.v64,.zip,.7z" hidden>
+    <p><small>Use ROMs you dumped from cartridges you own. Nothing is uploaded; the file stays in your browser.</small></p>
+    <div id="err"></div>
+  </div>
+  <div id="stage"><div id="game"></div></div>
+</main>
+
+<script>
+// Cache the emulator after the first online run so it works offline later (needs https or localhost).
+if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
+
+const drop = document.getElementById('drop');
+const file = document.getElementById('file');
+const stage = document.getElementById('stage');
+const err = document.getElementById('err');
+
+document.getElementById('pick').onclick = () => file.click();
+document.getElementById('reset').onclick = () => location.reload();
+file.onchange = () => file.files[0] && start(file.files[0]);
+
+['dragenter','dragover'].forEach(e => drop.addEventListener(e, ev => { ev.preventDefault(); drop.classList.add('over'); }));
+['dragleave','drop'].forEach(e => drop.addEventListener(e, ev => { ev.preventDefault(); drop.classList.remove('over'); }));
+drop.addEventListener('drop', ev => { const f = ev.dataTransfer.files[0]; if (f) start(f); });
+
+function start(f){
+  if (!/\.(z64|n64|v64|zip|7z)$/i.test(f.name)) { err.textContent = 'That does not look like an N64 ROM.'; return; }
+  err.textContent = '';
+  drop.style.display = 'none';
+  stage.style.display = 'block';
+  document.getElementById('reset').style.display = '';
+
+  // EmulatorJS (mupen64plus-next core) does the actual emulation.
+  window.EJS_player = '#game';
+  window.EJS_core = 'n64';
+  window.EJS_gameUrl = URL.createObjectURL(f);
+  window.EJS_gameName = f.name.replace(/\.[^.]+$/, '');
+  window.EJS_pathtodata = 'https://cdn.emulatorjs.org/stable/data/';
+  window.EJS_startOnLoaded = true;
+  window.EJS_color = '#e4572e';
+  window.EJS_threads = false;
+
+  const s = document.createElement('script');
+  s.src = window.EJS_pathtodata + 'loader.js';
+  s.onerror = () => { err.textContent = 'Could not load the emulator. Connect to the internet once so it can be cached for offline use.'; drop.style.display=''; stage.style.display='none'; };
+  document.body.appendChild(s);
+}
+</script>
+</body>
+</html>
